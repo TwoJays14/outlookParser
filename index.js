@@ -3,6 +3,7 @@
 import settings from "./appSettings.js";
 import {BrowserAuthError, InteractionRequiredAuthError, PublicClientApplication} from "@azure/msal-browser";
 
+const tableBody = document.getElementById('table-body');
 const promoKeywords = [
   "offer",
   "special offer",
@@ -128,7 +129,9 @@ const promoKeywords = [
   "hello subscriber – % off"
 ];
 
-let userData = {};
+let userData = {
+  promotions: []
+};
 
 const msalPublicClientApplicationInstance = new PublicClientApplication({
   auth: {
@@ -204,23 +207,72 @@ function searchInboxMessages(inboxMessages) {
     throw new Error("No inbox messages present");
   }
 
+  let i = 0;
+
   inboxMessages.value.forEach((inboxMessage) => {
     const subject = inboxMessage.subject.toLowerCase();
     const isPromo = promoKeywords.some((keyword) => subject.includes(keyword));
     if(isPromo) {
       console.log(inboxMessage.from.emailAddress.name, " has a deal: ", inboxMessage.subject, "received at: ", inboxMessage.receivedDateTime.split('T')[0], " ", inboxMessage.receivedDateTime.split('T')[1]);
+      userData.promotions.push({
+        id: ++i,
+        sender: inboxMessage.from.emailAddress.name,
+        subject: inboxMessage.subject,
+        receivedAt: `${inboxMessage.receivedDateTime.split('T')[0]} ${inboxMessage.receivedDateTime.split('T')[1]}`
+      })
     }
+    console.log(userData);
   });
+
+  renderList(userData.promotions);
+
 };
+
+
+function displayMessage(promotionId) {
+  console.log(promotionId);
+
+  const promotion = userData.promotions.find(promotion => promotion.id === promotionId)
+
+  console.log("found promotion: ", promotion);
+}
+
+function renderList(promotions) {
+  if(promotions.length <= 0) {
+    throw new Error("There are no promotions in the list");
+  }
+
+  promotions.forEach((promotion, i) => {
+    console.log("promotion: ", promotion)
+    tableBody.insertAdjacentHTML('beforeend',
+      `
+       <tr>
+            <th>${++i}</th>
+            <td>${promotion.sender}</td>
+            <td>${promotion.subject}</td>
+            <td>${promotion.receivedAt}</td>
+            <td class="view-more-btn cursor-pointer">View More</td>
+        </tr>
+      `
+    )
+  });
+
+  document.querySelectorAll('.view-more-btn').forEach((btn, i) => {
+    btn.addEventListener('click', (e) => {
+      displayMessage(++i)
+    })
+  });
+}
+
 
 document.querySelector('.signup-btn').addEventListener('click', async () => {
   const user = await loginUser();
 
-  setUserData(user);
-
   if(!user) {
     throw new Error(`Authentication Error: ${user}`)
   }
+
+  setUserData(user);
 
   const activeAccount = getActiveAccount();
 
