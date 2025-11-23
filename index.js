@@ -1,9 +1,16 @@
 "use strict";
 
 import settings from "./appSettings.js";
-import {BrowserAuthError, InteractionRequiredAuthError, PublicClientApplication} from "@azure/msal-browser";
+import {getAccessToken, getActiveAccount, loginUser, setActiveAccount} from "./authService.js";
 
-const tableBody = document.getElementById('table-body');
+// TODO: pagination
+// TODO: logout
+// TODO: clear session cookies when browserAuthError
+
+const tableBodyElement = document.getElementById('table-body');
+const bodyElement = document.querySelector('body');
+const searchElement = document.querySelector('#search');
+
 const promoKeywords = [
   "offer",
   "special offer",
@@ -133,45 +140,6 @@ let userData = {
   promotions: []
 };
 
-const msalPublicClientApplicationInstance = new PublicClientApplication({
-  auth: {
-    clientId: settings.clientId,
-    authority: `${settings.authorityUrl}/${settings.tenantId}`,
-    redirectUri: settings.localhostUrl,
-  }
-});
-
-await msalPublicClientApplicationInstance.initialize();
-
-async function loginUser() {
-  return await msalPublicClientApplicationInstance.loginPopup({
-    scopes: settings.graphUserScopes
-  });
-}
-
-function getActiveAccount() {
-  return msalPublicClientApplicationInstance.getAllAccounts()[0];
-}
-
-function setActiveAccount(activeAccount) {
-  msalPublicClientApplicationInstance.setActiveAccount(activeAccount);
-}
-
-async function getAccessToken(activeAccount) {
-  const token = await msalPublicClientApplicationInstance.acquireTokenSilent({
-    scopes: settings.graphUserScopes,
-    account: activeAccount,
-  });
-
-  if (token instanceof InteractionRequiredAuthError || token instanceof BrowserAuthError) {
-    return msalPublicClientApplicationInstance.acquireTokenPopup({
-      scopes: settings.graphUserScopes
-    })
-  };
-
-  return token;
-}
-
 async function getCurrentUserData(activeAccountToken) {
   const headers = new Headers({
     "Authorization": `Bearer ${activeAccountToken.accessToken}`
@@ -196,14 +164,15 @@ async function getInboxMessages() {
   return (await fetch(`${settings.apiBaseUrl}/me/mailfolders/inbox/messages?$select=subject,from,receivedDateTime&$top=1000&$orderby=receivedDateTime%20DESC`, options)).json();
 }
 
-function setUserData(user) {
-  userData.accessToken = user.accessToken;
-  userData.idToken = user.idToken;
-  userData.name = user.account.name;
+function setUserData(userDataObject) {
+  userData = {
+    ...userData,
+    ...userDataObject
+  }
 }
 
-function searchInboxMessages(inboxMessages) {
-  if(inboxMessages.value.length <= 0) {
+function getPromotions(inboxMessages) {
+  if (inboxMessages.value.length <= 0) {
     throw new Error("No inbox messages present");
   }
 
@@ -212,87 +181,146 @@ function searchInboxMessages(inboxMessages) {
   inboxMessages.value.forEach((inboxMessage) => {
     const subject = inboxMessage.subject.toLowerCase();
     const isPromo = promoKeywords.some((keyword) => subject.includes(keyword));
-    if(isPromo) {
-      console.log(inboxMessage.from.emailAddress.name, " has a deal: ", inboxMessage.subject, "received at: ", inboxMessage.receivedDateTime.split('T')[0], " ", inboxMessage.receivedDateTime.split('T')[1]);
+
+    if (isPromo) {
       userData.promotions.push({
         id: ++i,
+        emailId: inboxMessage.id,
         sender: inboxMessage.from.emailAddress.name,
         subject: inboxMessage.subject,
         receivedAt: `${inboxMessage.receivedDateTime.split('T')[0]} ${inboxMessage.receivedDateTime.split('T')[1]}`
       })
     }
-    console.log(userData);
   });
 
-  renderList(userData.promotions);
-
+  return userData.promotions;
 };
 
 
-function displayMessage(promotionId) {
-  console.log(promotionId);
+async function getMessage(promotion) {
+  const options = {
+    method: "GET",
+    headers: new Headers({
+      "Authorization": `Bearer ${userData.accessToken}`
+    }),
+  };
 
-  const promotion = userData.promotions.find(promotion => promotion.id === promotionId)
+  const message = await (await fetch(`${settings.apiBaseUrl}/me/messages/${promotion.emailId}`, options)).json();
 
-  console.log("found promotion: ", promotion);
+  promotion.messageContent = message.body.content;
+  promotion.link = message.webLink;
 }
 
-function renderList(promotions) {
-  if(promotions.length <= 0) {
-    throw new Error("There are no promotions in the list");
+async function displayMessage(emailSender) {
+  const promotion = userData.promotions.find(promotion => promotion.emailId.trim() === emailSender.trim());
+
+
+  if(!promotion) {
+    throw new Error("Promotion not found");
   }
 
-  promotions.forEach((promotion, i) => {
-    console.log("promotion: ", promotion)
-    tableBody.insertAdjacentHTML('beforeend',
-      `
-       <tr>
-            <th>${++i}</th>
-            <td>${promotion.sender}</td>
-            <td>${promotion.subject}</td>
-            <td>${promotion.receivedAt}</td>
-            <td class="view-more-btn cursor-pointer">View More</td>
-        </tr>
-      `
-    )
-  });
+  await getMessage(promotion);
 
-  document.querySelectorAll('.view-more-btn').forEach((btn, i) => {
-    btn.addEventListener('click', (e) => {
-      displayMessage(++i)
+  const modalHeaderElement = document.querySelector('.modal-header');
+  const modalText1Element = document.querySelector('.modal-text-1');
+
+  modalHeaderElement.innerText = `${promotion.sender}`;
+  modalText1Element.innerHTML = `${promotion.messageContent}`;
+
+}
+
+function attachTableRowEventListeners() {
+  document.querySelectorAll('.view-more').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      await displayMessage(btn.dataset.promotionId);
+      document.getElementById('my_modal_2').showModal();
     })
   });
 }
 
+function createModalDialogElement() {
+  bodyElement.insertAdjacentHTML('beforeend',
+    `
+        <dialog id="my_modal_2" class="modal modal-bottom sm:modal-middle">
+     <div class="modal-box w-11/12 max-w-5xl">
+    <h3 class="text-lg font-bold modal-header"></h3>
+    <p class="py-4 modal-text-1"></p>
+  </div>
+</dialog>  
+      `
+  )
+}
 
 document.querySelector('.signup-btn').addEventListener('click', async () => {
   const user = await loginUser();
 
-  if(!user) {
+  if (!user) {
     throw new Error(`Authentication Error: ${user}`)
   }
 
-  setUserData(user);
+  setUserData({
+    accessToken: user.accessToken,
+    idToken: user.idToken,
+    name: user.account.name,
+  })
 
   const activeAccount = getActiveAccount();
 
-  if(!activeAccount) {
+  if (!activeAccount) {
     throw new Error(`Error getting active account: ${activeAccount}`);
   }
 
   setActiveAccount(activeAccount);
 
   const activeAccountToken = await getAccessToken(activeAccount);
-
   const currentUserData = await getCurrentUserData(activeAccountToken);
 
-  userData.userPrincipalName = currentUserData.userPrincipalName;
-  userData.id = currentUserData.id;
-  userData.displayName = currentUserData.displayName;
+  setUserData({
+    userPrincipalName: currentUserData.userPrincipalName,
+    id: currentUserData.id,
+    displayName: currentUserData.displayName,
+    inboxMessages: (await getInboxMessages())
+  });
 
-  userData.inboxMessages = await getInboxMessages();
-  console.log("User data: ", userData);
+  const promotions = getPromotions(userData.inboxMessages);
 
-  searchInboxMessages(userData.inboxMessages);
+  renderTable(promotions);
+
+  createModalDialogElement();
+
+  setupSearchEventListener();
 });
 
+function setupSearchEventListener() {
+  searchElement.addEventListener('input', (e) => {
+    searchPromotions(e.target.value)
+  })
+}
+
+function renderTable(searchResult) {
+  if(searchResult.length <= 0) {
+    throw new Error("There are no items in this list");
+  }
+
+  tableBodyElement.innerHTML = '';
+
+  searchResult.forEach((promotion, i) => {
+    tableBodyElement.insertAdjacentHTML('beforeend',
+      `
+       <tr class="view-more cursor-pointer" data-promotion-id=${promotion.emailId}>
+            <td>${i + 1}</td>
+            <td>${promotion.sender}</td>
+            <td>${promotion.subject}</td>
+            <td>${promotion.receivedAt}</td>
+        </tr>
+      `
+    )
+  });
+
+  attachTableRowEventListeners();
+}
+
+function searchPromotions(value) {
+  const searchResult = userData.promotions.filter((promotion) => promotion.sender.toLowerCase().includes(value.toLowerCase()));
+  renderTable(searchResult);
+}
