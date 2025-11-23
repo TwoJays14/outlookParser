@@ -1,6 +1,10 @@
 import settings from "./appSettings.js";
-import {renderTable} from "./uiService.js";
-import {userData} from "./index.js";
+import {
+  renderTable
+} from "./uiService.js";
+import {
+  userData
+} from "./userService.js";
 
 export const promoKeywords = [
   "offer",

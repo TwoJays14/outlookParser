@@ -18,21 +18,14 @@ import {
   setupSearchEventListener
 } from "./uiService.js";
 
+import {
+  setUserData,
+  userData
+} from "./userService.js";
+
 // TODO: pagination
 // TODO: logout
 // TODO: clear session cookies when browserAuthError
-
-export let userData = {
-  promotions: []
-};
-
-export function setUserData(userDataObject) {
-  userData = {
-    ...userData,
-    ...userDataObject
-  }
-}
-
 
 document.querySelector('.signup-btn').addEventListener('click', async () => {
   const user = await loginUser();

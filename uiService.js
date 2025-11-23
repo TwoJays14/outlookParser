@@ -1,5 +1,11 @@
-import {userData} from "./index.js";
-import {getMessage, searchPromotions} from "./emailService.js";
+import {
+  userData
+} from "./userService.js";
+
+import {
+  getMessage,
+  searchPromotions
+} from "./emailService.js";
 
 const bodyElement = document.querySelector('body');
 const tableBodyElement = document.getElementById('table-body');
