@@ -1,4 +1,4 @@
-import settings from "./appSettings.js";
+import settings from "../appConfig/config.js";
 import {BrowserAuthError, InteractionRequiredAuthError, PublicClientApplication} from "@azure/msal-browser";
 
 const msalPublicClientApplicationInstance = new PublicClientApplication({

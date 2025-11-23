@@ -1,4 +1,4 @@
-import settings from "./appSettings.js";
+import settings from "../appConfig/config.js";
 import {
   renderTable
 } from "./uiService.js";

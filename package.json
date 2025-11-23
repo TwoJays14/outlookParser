@@ -1,7 +1,7 @@
 {
   "name": "outlookparser",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "app/main.js",
   "scripts": {
     "dev": "vite"
   },

@@ -5,27 +5,29 @@ import {
   getActiveAccount,
   loginUser,
   setActiveAccount
-} from "./authService.js";
+} from "../services/authService.js";
 
 import {
   getCurrentUserData,
   getInboxMessages,
-  getPromotions} from "./emailService.js";
+  getPromotions} from "../services/emailService.js";
 
 import {
   createModalDialogElement,
   renderTable,
   setupSearchEventListener
-} from "./uiService.js";
+} from "../services/uiService.js";
 
 import {
   setUserData,
   userData
-} from "./userService.js";
+} from "../services/userService.js";
 
 // TODO: pagination
 // TODO: logout
 // TODO: clear session cookies when browserAuthError
+// TODO: error handling
+// TODO: handle case if user has no promotional emails when logging in
 
 document.querySelector('.signup-btn').addEventListener('click', async () => {
   const user = await loginUser();
